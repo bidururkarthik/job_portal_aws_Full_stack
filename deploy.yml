@@ -1,0 +1,45 @@
+name: Deploy Job Portal
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/key.pem
+          chmod 400 ~/.ssh/key.pem
+
+      - name: Deploy to EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+
+          cd ~/job_portal_aws_Full_stack
+
+          git pull origin main
+
+          # Backend
+          cd server
+          npm install
+          pm2 restart job-portal-api
+
+          # Frontend
+          cd ../client
+          npm install
+          npm run build
+
+          sudo rm -rf /var/www/job-portal/*
+          sudo cp -r dist/* /var/www/job-portal/
+
+          sudo systemctl reload nginx
+
+          EOF
